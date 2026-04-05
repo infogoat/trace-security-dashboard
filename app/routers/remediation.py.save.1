@@ -1,0 +1,86 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.database import SessionLocal
+from app.models.remediation import RemediationRequest
+from app.core.security import get_current_user
+from app.models.audit import AuditResult
+from app.models.system import System
+from app.models.user import User
+from fastapi import HTTPException
+import subprocess
+
+router = APIRouter(prefix="/remediation", tags=["Remediation"])
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@router.post("/raise")
+def raise_request(system_id: int, rule_id: str, rule_name: str, db: Session = Depends(get_db)):
+    request = RemediationRequest(
+        system_id=system_id,
+        rule_id=rule_id,
+        rule_name=rule_name
+    )
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+    return {"message": "Remediation request created"}
+
+@router.get("/pending")
+def list_pending_requests(db: Session = Depends(get_db)):
+    return db.query(RemediationRequest).filter(
+        RemediationRequest.status == "pending"
+    ).all()
+
+@router.post("/approve/{request_id}")
+def approve_request(
+    request_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+
+    # 🔐 Admin-only check
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # 🔍 Find remediation request
+    request = db.query(RemediationRequest).filter(
+        RemediationRequest.id == request_id
+    ).first()
+
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    # Mark request approved
+    request.status = "approved"
+    db.commit()
+
+    # 🔧 Execute actual remediation
+    audit = db.query(AuditResult).filter(
+        AuditResult.system_id == request.system_id,
+        AuditResult.rule_id == request.rule_id,
+        AuditResult.status == False
+    ).order_by(AuditResult.id.desc()).first()
+
+    if not audit:
+        return {"message": "No failed audit found for this rule"}
+
+    try:
+        subprocess.run(audit.remediation, shell=True, check=True)
+    except subprocess.CalledProcessError:
+        raise HTTPException(status_code=500, detail="Remediation execution failed")
+
+    # 🔄 Trigger full re-audit
+    try:
+        subprocess.Popen(["python3", "/home/ubuntu/trace/agent_linux.py"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Re-audit trigger failed: {str(e)}")
+
+    return {
+        "message": "Remediation approved. Re-audit triggered.",
+        "system_id": request.system_id
+    }

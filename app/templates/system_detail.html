@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block page_title %}System Details{% endblock %}
+
+{% block content %}
+<script>protectRoute();</script>
+
+<h3 class="text-xl font-semibold mb-4">Audit Runs</h3>
+<div id="runsContainer" class="mb-6"></div>
+
+<h3 class="text-xl font-semibold mb-4">Failed Rules</h3>
+<table class="w-full border border-slate-200 mb-8">
+    <thead class="bg-slate-100">
+        <tr>
+            <th class="p-3 text-left">Rule</th>
+            <th class="p-3 text-left">Severity</th>
+            <th class="p-3 text-left">Action</th>
+        </tr>
+    </thead>
+    <tbody id="failedTable"></tbody>
+</table>
+
+<h3 class="text-xl font-semibold mb-4">Security Trend</h3>
+<canvas id="trendChart"></canvas>
+
+<script>
+const systemId = {{ system_id }};
+
+async function loadRuns() {
+    const res = await fetch(`/audit/runs/${systemId}`);
+    const runs = await res.json();
+
+    const container = document.getElementById("runsContainer");
+    container.innerHTML = "";
+
+    runs.forEach(run => {
+        container.innerHTML += `
+            <div class="bg-white p-4 rounded shadow mb-2 cursor-pointer hover:bg-slate-50"
+                 onclick="loadFailed(${run.run_id})">
+                Run ${run.run_id} — Score: ${run.score}%
+            </div>
+        `;
+    });
+
+    if (runs.length > 0) {
+        loadFailed(runs[0].run_id);
+    }
+}
+
+async function loadFailed(runId) {
+    const res = await fetch(`/audit/failed/${runId}`);
+    const failed = await res.json();
+
+    const table = document.getElementById("failedTable");
+    table.innerHTML = "";
+
+    failed.forEach(rule => {
+        table.innerHTML += `
+            <tr class="border-t border-slate-200 hover:bg-slate-50">
+                <td class="p-3">${rule.rule_name}</td>
+                <td class="p-3 font-semibold">${rule.severity}</td>
+                <td class="p-3">
+                    <button onclick="fixRule(${runId}, '${rule.rule_id}')"
+                            class="bg-black text-white px-3 py-1 rounded hover:bg-slate-800">
+                        Fix
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+async function fixRule(runId, ruleId) {
+    await fetch(`/remediation/execute/${runId}/${ruleId}`, {
+        method: "POST"
+    });
+
+    alert("Remediation executed.");
+    loadRuns();
+}
+
+async function loadTrend() {
+    const res = await fetch(`/audit/trend/${systemId}`);
+    const trend = await res.json();
+
+    new Chart(document.getElementById("trendChart"), {
+        type: "bar",
+        data: {
+            labels: trend.map(t => `Run ${t.run_id}`),
+            datasets: [{
+                label: "Score",
+                data: trend.map(t => t.score),
+                backgroundColor: "#3b82f6"
+            }]
+        }
+    });
+}
+
+loadRuns();
+loadTrend();
+</script>
+
+{% endblock %}

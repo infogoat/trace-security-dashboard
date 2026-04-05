@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="p-8">
+
+<h2 class="text-2xl font-bold mb-6">Vulnerabilities</h2>
+
+<div class="bg-white shadow rounded p-6">
+    <table class="w-full border border-slate-200">
+        <thead class="bg-slate-100">
+            <tr>
+                <th class="p-3">Rule</th>
+                <th class="p-3">Severity</th>
+                <th class="p-3">System</th>
+            </tr>
+        </thead>
+        <tbody id="vulnTable"></tbody>
+    </table>
+</div>
+
+</div>
+
+<script>
+async function loadVulnerabilities() {
+    const token = localStorage.getItem("token");
+    const systems = await fetch("/systems/", {
+        headers: { "Authorization": "Bearer " + token }
+    }).then(res => res.json());
+
+    const table = document.getElementById("vulnTable");
+    table.innerHTML = "";
+
+    for (let system of systems) {
+        const runs = await fetch(`/audit/runs/${system.id}`, {
+            headers: { "Authorization": "Bearer " + token }
+        }).then(res => res.json());
+
+        if (runs.length > 0) {
+            const failed = await fetch(`/audit/failed/${runs[0].run_id}`, {
+                headers: { "Authorization": "Bearer " + token }
+            }).then(res => res.json());
+
+            for (let issue of failed) {
+                table.innerHTML += `
+                    <tr class="border-t hover:bg-slate-50">
+                        <td class="p-3">${issue.rule_name}</td>
+                        <td class="p-3">${issue.severity}</td>
+                        <td class="p-3">${system.hostname}</td>
+                    </tr>
+                `;
+            }
+        }
+    }
+}
+
+loadVulnerabilities();
+</script>
+
+{% endblock %}

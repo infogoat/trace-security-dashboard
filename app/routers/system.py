@@ -1,0 +1,45 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from app.database import SessionLocal
+from app.models.system import System
+from app.schemas.system_schema import SystemCreate, SystemResponse
+from typing import List
+from app.core.security import get_current_user
+from app.models.user import User
+
+router = APIRouter(prefix="/systems", tags=["Systems"])
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@router.post("/", response_model=SystemResponse)
+def register_system(system: SystemCreate, db: Session = Depends(get_db)):
+    new_system = System(
+        hostname=system.hostname,
+        ip_address=system.ip_address,
+        os_type=system.os_type,
+        security_score=0.0
+    )
+    db.add(new_system)
+    db.commit()
+    db.refresh(new_system)
+    return new_system
+
+@router.get("/")
+def list_systems(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+
+    # ADMIN → see everything
+    if current_user.role == "admin":
+        return db.query(System).all()
+
+    # USER → see only systems owned by that user
+    return db.query(System).filter(
+        System.owner_id == current_user.id
+    ).all()

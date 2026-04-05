@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="p-6">
+
+    <h1 class="text-2xl font-semibold mb-6">Dashboard Overview</h1>
+
+    <!-- ================= ADMIN SECTION ================= -->
+    <div id="adminSection" class="hidden">
+
+        <h2 class="text-xl font-semibold mb-4">All Systems</h2>
+
+        <div class="bg-white rounded shadow overflow-hidden">
+            <table class="min-w-full text-sm">
+                <thead class="bg-slate-100">
+                    <tr>
+                        <th class="p-3 text-left">System</th>
+                        <th class="p-3 text-left">IP Address</th>
+                        <th class="p-3 text-left">OS</th>
+                        <th class="p-3 text-left">Score</th>
+                        <th class="p-3 text-left">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="adminSystemsTable"></tbody>
+            </table>
+        </div>
+
+    </div>
+
+
+    <!-- ================= USER SECTION ================= -->
+    <div id="userSection" class="hidden">
+
+        <h2 class="text-xl font-semibold mb-4">My System</h2>
+
+        <div id="userSystemCard" class="bg-white p-6 rounded shadow mb-6"></div>
+
+        <h3 class="text-lg font-semibold mb-3">Failed Rules</h3>
+        <div class="bg-white rounded shadow overflow-hidden">
+            <table class="min-w-full text-sm">
+                <thead class="bg-slate-100">
+                    <tr>
+                        <th class="p-3 text-left">Rule</th>
+                        <th class="p-3 text-left">Severity</th>
+                        <th class="p-3 text-left">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="failedRulesTable"></tbody>
+            </table>
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+function getToken() {
+    return localStorage.getItem("token");
+}
+
+function authHeaders() {
+    return {
+        "Authorization": "Bearer " + getToken()
+    };
+}
+
+async function loadUser() {
+
+    const token = getToken();
+
+    if (!token) {
+        window.location.href = "/";
+        return;
+    }
+
+    const res = await fetch("/me", {
+        headers: authHeaders()
+    });
+
+    if (!res.ok) {
+        localStorage.removeItem("token");
+        window.location.href = "/";
+        return;
+    }
+
+    const user = await res.json();
+
+    if (user.role === "admin") {
+        loadAdminDashboard();
+    } else {
+        loadUserDashboard(user.id);
+    }
+}
+
+async function loadAdminDashboard() {
+
+    document.getElementById("adminSection").classList.remove("hidden");
+
+    const res = await fetch("/systems/", {
+        headers: authHeaders()
+    });
+
+    const systems = await res.json();
+    const table = document.getElementById("adminSystemsTable");
+    table.innerHTML = "";
+
+    systems.forEach(system => {
+        table.innerHTML += `
+            <tr class="border-t hover:bg-slate-50">
+                <td class="p-3">${system.hostname}</td>
+                <td class="p-3">${system.ip_address}</td>
+                <td class="p-3">${system.os_type}</td>
+                <td class="p-3 font-semibold">${system.security_score}%</td>
+                <td class="p-3">
+                    <a href="/system/${system.id}" class="text-blue-600 underline">
+                        View Details
+                    </a>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+async function loadUserDashboard(userId) {
+
+    document.getElementById("userSection").classList.remove("hidden");
+
+    const res = await fetch("/systems/", {
+        headers: authHeaders()
+    });
+
+    const systems = await res.json();
+
+    if (systems.length === 0) {
+        document.getElementById("userSystemCard").innerHTML =
+            "<p>No system assigned.</p>";
+        return;
+    }
+
+    const system = systems[0];
+
+    document.getElementById("userSystemCard").innerHTML = `
+        <p><strong>Hostname:</strong> ${system.hostname}</p>
+        <p><strong>IP:</strong> ${system.ip_address}</p>
+        <p><strong>Score:</strong> ${system.security_score}%</p>
+        <button onclick="runAudit(${system.id})"
+            class="mt-4 bg-black text-white px-4 py-2 rounded">
+            Run Manual Audit
+        </button>
+    `;
+
+    loadFailedRules(system.id);
+}
+
+async function loadFailedRules(systemId) {
+
+    const runsRes = await fetch(`/audit/runs/${systemId}`, {
+        headers: authHeaders()
+    });
+
+    const runs = await runsRes.json();
+
+    if (runs.length === 0) return;
+
+    const latestRun = runs[0].run_id;
+
+    const failedRes = await fetch(`/audit/failed/${latestRun}`, {
+        headers: authHeaders()
+    });
+
+    const failed = await failedRes.json();
+
+    const table = document.getElementById("failedRulesTable");
+    table.innerHTML = "";
+
+    failed.forEach(rule => {
+        table.innerHTML += `
+            <tr class="border-t hover:bg-slate-50">
+                <td class="p-3">${rule.rule_name}</td>
+                <td class="p-3">${rule.severity}</td>
+                <td class="p-3">
+                    <button onclick="raiseRemediation('${rule.rule_id}', '${rule.rule_name}', ${systemId})"
+                        class="bg-red-600 text-white px-3 py-1 rounded">
+                        Raise Request
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+async function raiseRemediation(ruleId, ruleName, systemId) {
+
+    await fetch(`/remediation/raise?system_id=${systemId}&rule_id=${ruleId}&rule_name=${ruleName}`, {
+        method: "POST",
+        headers: authHeaders()
+    });
+
+    alert("Remediation request submitted");
+}
+
+async function runAudit(systemId) {
+    const token = localStorage.getItem("token");
+
+    const res = await fetch(`/audit/trigger/${systemId}`, {
+        method: "POST",
+        headers: {
+            "Authorization": "Bearer " + token
+        }
+    });
+
+    const data = await res.json();
+
+    alert(data.message);
+
+    // reload systems after few seconds
+    setTimeout(() => {
+        location.reload();
+    }, 3000);
+}
+
+loadUser();
+
+</script>
+
+{% endblock %}

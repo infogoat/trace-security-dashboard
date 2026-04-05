@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="p-8">
+
+    <h2 class="text-2xl font-bold mb-6">Remediation Requests</h2>
+
+    <div class="bg-white shadow rounded p-6">
+        <table class="w-full border border-slate-200">
+            <thead class="bg-slate-100">
+                <tr>
+                    <th class="p-3 text-left">Rule</th>
+                    <th class="p-3 text-left">System</th>
+                    <th class="p-3 text-left">Action</th>
+                </tr>
+            </thead>
+            <tbody id="remTable"></tbody>
+        </table>
+    </div>
+
+</div>
+
+<script>
+
+async function loadRemediation() {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+        alert("Not authenticated. Please login again.");
+        window.location.href = "/";
+        return;
+    }
+
+    try {
+        const response = await fetch("/remediation/pending", {
+            headers: {
+                "Authorization": "Bearer " + token
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to fetch remediation requests");
+        }
+
+        const pending = await response.json();
+        const table = document.getElementById("remTable");
+        table.innerHTML = "";
+
+        if (pending.length === 0) {
+            table.innerHTML = `
+                <tr>
+                    <td colspan="3" class="p-4 text-center text-slate-500">
+                        No pending remediation requests.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        for (let req of pending) {
+            table.innerHTML += `
+                <tr class="border-t">
+                    <td class="p-3">${req.rule_name}</td>
+                    <td class="p-3">${req.system_id}</td>
+                    <td class="p-3">
+                        <button onclick="approveRequest(${req.id})"
+                            class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition">
+                            Approve
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+
+    } catch (error) {
+        console.error(error);
+        alert("Error loading remediation requests.");
+    }
+}
+
+async function approveRequest(requestId) {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+        alert("Not authenticated.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/remediation/approve/${requestId}`, {
+            method: "POST",
+            headers: {
+                "Authorization": "Bearer " + token
+            }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || "Approval failed");
+        }
+
+        alert(data.message);
+        loadRemediation();
+
+    } catch (error) {
+        console.error(error);
+        alert("Error approving remediation request.");
+    }
+}
+
+loadRemediation();
+
+</script>
+{% endblock %}

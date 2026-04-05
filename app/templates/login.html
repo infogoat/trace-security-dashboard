@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>TRACE Security Access</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-100 flex items-center justify-center h-screen">
+
+<div class="bg-white w-96 p-8 rounded-xl shadow-lg">
+
+    <h2 class="text-2xl font-semibold mb-6 text-center">
+        TRACE Security
+    </h2>
+
+    <form id="authForm" class="space-y-4">
+
+        <!-- Username -->
+        <input 
+            type="text"
+            id="username"
+            name="username"
+            placeholder="Username"
+            class="w-full border border-slate-300 p-2 rounded focus:ring-2 focus:ring-black"
+            required
+        >
+
+        <!-- Password -->
+        <input 
+            type="password" 
+            id="password" 
+            name="password"
+            placeholder="Password"
+            pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,}"
+            title="Password must contain at least one uppercase letter, one lowercase letter, one number, and be at least 6 characters long"
+            class="w-full border border-slate-300 p-2 rounded focus:ring-2 focus:ring-black"
+            required
+        >
+
+        <!-- Role Dropdown (Hidden in Login Mode) -->
+        <select 
+            id="role"
+            class="w-full border border-slate-300 p-2 rounded focus:ring-2 focus:ring-black hidden"
+        >
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+        </select>
+
+        <!-- Password Hint -->
+        <p class="text-xs text-slate-500">
+            Password must include:
+            1 uppercase, 1 lowercase, 1 digit (min 6 characters)
+        </p>
+
+        <!-- Submit Button -->
+        <button 
+            type="submit"
+            class="w-full bg-black text-white py-2 rounded hover:bg-slate-800"
+        >
+            <span id="authButtonText">Login</span>
+        </button>
+    </form>
+
+    <!-- Toggle -->
+    <p class="text-center mt-4 text-sm">
+        <a href="#" id="toggleAuth" class="text-blue-600 underline">
+            Don't have an account? Register
+        </a>
+    </p>
+
+</div>
+
+<script>
+let isLogin = true;
+
+const toggleLink = document.getElementById("toggleAuth");
+const roleSelect = document.getElementById("role");
+const buttonText = document.getElementById("authButtonText");
+
+toggleLink.addEventListener("click", function(e){
+    e.preventDefault();
+    isLogin = !isLogin;
+
+    buttonText.innerText = isLogin ? "Login" : "Register";
+    roleSelect.classList.toggle("hidden", isLogin);
+
+    toggleLink.innerText = isLogin ?
+        "Don't have an account? Register" :
+        "Already have an account? Login";
+});
+
+
+document.getElementById("authForm").addEventListener("submit", async function(e){
+    e.preventDefault();
+
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value;
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
+    if (!passwordRegex.test(password)) {
+        alert("Password must contain uppercase, lowercase and digit.");
+        return;
+    }
+
+    if (isLogin) {
+
+        const formData = new URLSearchParams();
+        formData.append("username", username);
+        formData.append("password", password);
+
+        const res = await fetch("/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: formData
+        });
+
+        const data = await res.json();
+
+        if (data.access_token) {
+            localStorage.setItem("token", data.access_token);
+            localStorage.setItem("role", data.role);
+            window.location.href = "/dashboard";
+        } else {
+            alert("Invalid credentials");
+        }
+
+    } else {
+        // REGISTER (still JSON)
+        const role = document.getElementById("role").value;
+
+        const res = await fetch("/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password, role })
+        });
+
+        if (res.status === 200) {
+            alert("Registered successfully. Please login.");
+            isLogin = true;
+            document.getElementById("role").classList.add("hidden");
+        } else {
+            const data = await res.json();
+            alert(data.detail || "Registration failed");
+        }
+    }
+});
+</script>
+
+</body>
+</html>

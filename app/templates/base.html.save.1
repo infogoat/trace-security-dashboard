@@ -1,0 +1,52 @@
+e flex flex-col">
+
+        <div class="h-16 flex items-center justify-center border-b border-slate-700">
+            <h1 class="text-xl font-bold">TRACE</h1>
+        </div>
+
+        <nav class="flex-1 p-4 space-y-2">
+
+            <a href="/dashboard" class="block px-4 py-2 rounded hover:bg-slate-800">
+                Dashboard Overview
+            </a>
+
+            <a href="/audit" class="block px-4 py-2 rounded hover:bg-slate-800">
+                Audit Results
+            </a>
+
+            <a href="/vulnerabilities" class="block px-4 py-2 rounded hover:bg-slate-800">
+                Vulnerabilities
+            </a>
+
+            <a href="/remediation-tools" class="block px-4 py-2 rounded hover:bg-slate-800">
+                Remediation Tools
+            </a>
+
+            <a href="/reports" class="block px-4 py-2 rounded hover:bg-slate-800">
+                Compliance Reports
+            </a>
+
+        </nav>
+    </aside>
+
+    <!-- Main Area -->
+    <div class="flex-1 flex flex-col">
+
+        <!-- Header -->
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6">
+            <h2 class="font-semibold text-lg">{% block page_title %}{% endblock %}</h2>
+
+            <div class="w-10 h-10 bg-slate-300 rounded-full"></div>
+        </header>
+
+        <!-- Content -->
+        <main class="flex-1 p-6 overflow-y-auto bg-slate-50">
+            {% block content %}{% endblock %}
+        </main>
+
+    </div>
+
+</div>
+
+</body>
+</html>

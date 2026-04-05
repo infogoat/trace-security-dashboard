@@ -1,0 +1,81 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.database import SessionLocal
+from app.models.remediation import RemediationRequest
+from app.core.security import get_current_user
+from app.models.audit import AuditResult
+from app.models.system import System
+
+router = APIRouter(prefix="/remediation", tags=["Remediation"])
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@router.post("/raise")
+def raise_request(system_id: int, rule_id: str, rule_name: str, db: Session = Depends(get_db)):
+    request = RemediationRequest(
+        system_id=system_id,
+        rule_id=rule_id,
+        rule_name=rule_name
+    )
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+    return {"message": "Remediation request created"}
+
+@router.get("/pending")
+def list_pending_requests(db: Session = Depends(get_db)):
+    return db.query(RemediationRequest).filter(
+        RemediationRequest.status == "pending"
+    ).all()
+
+
+@router.post("/approve/{request_id}")
+def approve_request(
+    request_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 🔒 Admin-only check
+    if current_user["role"] != "admin":
+        return {"error": "Admin access required"}
+
+    request = db.query(RemediationRequest).filter(
+        RemediationRequest.id == request_id
+    ).first()
+
+    if not request:
+        return {"error": "Request not found"}
+
+    request.status = "approved"
+
+    # 🔧 Simulate remediation (mark audit rule as passed)
+    audit = db.query(AuditResult).filter(
+        AuditResult.system_id == request.system_id,
+        AuditResult.rule_id == request.rule_id
+    ).first()
+
+    if audit:
+        audit.status = True
+
+    # 🔁 Recalculate security score
+    results = db.query(AuditResult).filter(
+        AuditResult.system_id == request.system_id
+    ).all()
+
+    total = len(results)
+    passed = len([r for r in results if r.status])
+
+    system = db.query(System).filter(System.id == request.system_id).first()
+    system.security_score = round((passed / total) * 100, 2) if total > 0 else 0
+
+    db.commit()
+
+    return {
+        "message": "Request approved and remediation executed",
+        "new_security_score": system.security_score
+    }

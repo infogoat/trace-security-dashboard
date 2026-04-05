@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="p-8">
+
+    <h2 class="text-2xl font-bold mb-6">Compliance Reports</h2>
+
+    <div class="bg-white shadow rounded p-6">
+
+        <p class="mb-4 text-slate-600">
+            Select a system and download the latest compliance report in Markdown format.
+        </p>
+
+        <div class="flex gap-4 items-center">
+
+            <select id="systemSelect"
+                class="border border-slate-300 p-2 rounded w-64">
+            </select>
+
+            <button onclick="downloadReport()"
+                class="bg-black text-white px-5 py-2 rounded hover:bg-slate-800">
+                Download Report (.md)
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+async function loadSystems() {
+    const token = localStorage.getItem("token");
+
+    const systems = await fetch("/systems/", {
+        headers: { "Authorization": "Bearer " + token }
+    }).then(res => res.json());
+
+    const select = document.getElementById("systemSelect");
+    select.innerHTML = "";
+
+    for (let system of systems) {
+        select.innerHTML += `
+            <option value="${system.id}">
+                ${system.hostname} (${system.os_type})
+            </option>
+        `;
+    }
+}
+
+function downloadReport() {
+    const systemId = document.getElementById("systemSelect").value;
+    window.location.href = `/compliance-report/${systemId}`;
+}
+
+loadSystems();
+
+</script>
+
+{% endblock %}
