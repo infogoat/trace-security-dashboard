@@ -17,12 +17,16 @@ def get_db():
         db.close()
 
 @router.post("/", response_model=SystemResponse)
-def register_system(system: SystemCreate, db: Session = Depends(get_db)):
+def register_system(
+    system: SystemCreate, 
+    db: Session = Depends(get_db)
+):
     new_system = System(
         hostname=system.hostname,
         ip_address=system.ip_address,
         os_type=system.os_type,
-        security_score=0.0
+        security_score=0.0,
+        owner_id = None
     )
     db.add(new_system)
     db.commit()
@@ -43,3 +47,25 @@ def list_systems(
     return db.query(System).filter(
         System.owner_id == current_user.id
     ).all()
+
+@router.post("/agent-register")
+def agent_register(payload: dict, db: Session = Depends(get_db)):
+    hostname = payload.get("hostname")
+
+    existing = db.query(System).filter(System.hostname == hostname).first()
+    if existing:
+        return {"system_id": existing.id}
+
+    new_system = System(
+        hostname=hostname,
+        ip_address="auto",
+        os_type="windows",
+        security_score=0.0,
+        owner_id=None
+    )
+
+    db.add(new_system)
+    db.commit()
+    db.refresh(new_system)
+
+    return {"system_id": new_system.id}

@@ -1,0 +1,38 @@
+import subprocess
+import requests
+import json
+import platform
+import os
+import time
+
+if platform.system() != "Windows":
+    print("This agent runs only on Windows.")
+    exit()
+
+EC2_IP = "13.62.224.104"
+
+SCAN_INTERVAL = 60
+
+while True:
+    print("Running Windows CIS Scanner......")
+    
+    subprocess.run(["python","main.py"])
+
+    json_path = os.path.join("output","scan.json")
+
+    if not os.path.exists(json_path):
+        print("scan.json not found!")
+        time.sleep(SCAN_INTERVAL)  
+        continue
+
+    with open(json_path,"r") as f:
+        scan_data = json.load(f)
+
+    parsed_results = []
+   
+    for rule in scan_data.get("checks",[]):
+        passed_results.append({
+            "rule_id": str(rule.get("id")),
+            "rule_name": rule.get("title"),
+            "framework": "CIS Windows 11",
+            "severity": "medium",

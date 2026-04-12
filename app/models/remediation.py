@@ -8,4 +8,4 @@ class RemediationRequest(Base):
     system_id = Column(Integer, ForeignKey("systems.id"))
     rule_id = Column(String)
     rule_name = Column(String)
-    status = Column(String, default="pending")  # pending, approved, executed
+    status = Column(String, default="pending", nullable=False)  # pending, approved, executed
