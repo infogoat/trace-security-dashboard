@@ -18,19 +18,31 @@ def get_db():
 
 @router.post("/", response_model=SystemResponse)
 def register_system(
-    system: SystemCreate, 
+    system: SystemCreate,
     db: Session = Depends(get_db)
 ):
+    # 🔥 CHECK IF SYSTEM EXISTS
+    existing = db.query(System).filter(
+        System.machine_id == system.machine_id
+    ).first()
+
+    if existing:
+        return existing
+
+    # 🔥 CREATE NEW SYSTEM
     new_system = System(
         hostname=system.hostname,
         ip_address=system.ip_address,
         os_type=system.os_type,
+        machine_id=system.machine_id,
         security_score=0.0,
-        owner_id = None
+        owner_id=None
     )
+
     db.add(new_system)
     db.commit()
     db.refresh(new_system)
+
     return new_system
 
 @router.get("/")

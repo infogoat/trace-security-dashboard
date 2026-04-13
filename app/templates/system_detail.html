@@ -25,78 +25,160 @@
 <script>
 const systemId = {{ system_id }};
 
+// =======================
+// LOAD RUNS
+// =======================
 async function loadRuns() {
-    const res = await fetch(`/audit/runs/${systemId}`);
-    const runs = await res.json();
+    try {
+        const res = await fetch(`/audit/runs/${systemId}`);
+        const runs = await res.json();
 
-    const container = document.getElementById("runsContainer");
-    container.innerHTML = "";
+        const container = document.getElementById("runsContainer");
+        container.innerHTML = "";
 
-    runs.forEach(run => {
-        container.innerHTML += `
-            <div class="bg-white p-4 rounded shadow mb-2 cursor-pointer hover:bg-slate-50"
-                 onclick="loadFailed(${run.run_id})">
-                Run ${run.run_id} — Score: ${run.score}%
-            </div>
-        `;
-    });
+        runs.forEach(run => {
+            container.innerHTML += `
+                <div class="bg-white p-4 rounded shadow mb-2 cursor-pointer hover:bg-slate-50"
+                     onclick="loadFailed(${run.run_id})">
+                    Run ${run.run_id} — Score: ${run.score}%
+                </div>
+            `;
+        });
 
-    if (runs.length > 0) {
-        loadFailed(runs[0].run_id);
+        if (runs.length > 0) {
+            loadFailed(runs[0].run_id);
+        }
+
+    } catch (err) {
+        console.error("Error loading runs:", err);
     }
 }
 
+// =======================
+// LOAD FAILED RULES
+// =======================
 async function loadFailed(runId) {
-    const res = await fetch(`/audit/failed/${runId}`);
-    const failed = await res.json();
+    try {
+        const res = await fetch(`/audit/failed/${runId}`);
+        const failed = await res.json();
 
-    const table = document.getElementById("failedTable");
-    table.innerHTML = "";
+        const table = document.getElementById("failedTable");
+        table.innerHTML = "";
 
-    failed.forEach(rule => {
-        table.innerHTML += `
-            <tr class="border-t border-slate-200 hover:bg-slate-50">
-                <td class="p-3">${rule.rule_name}</td>
-                <td class="p-3 font-semibold">${rule.severity}</td>
-                <td class="p-3">
-                    <button onclick="fixRule(${runId}, '${rule.rule_id}')"
-                            class="bg-black text-white px-3 py-1 rounded hover:bg-slate-800">
-                        Fix
-                    </button>
-                </td>
-            </tr>
-        `;
-    });
+        failed.forEach(rule => {
+            table.innerHTML += `
+                <tr class="border-t border-slate-200 hover:bg-slate-50">
+                    <td class="p-3">${rule.rule_name}</td>
+                    <td class="p-3 font-semibold">${rule.severity}</td>
+                    <td class="p-3">
+                        <button onclick="fixRule(${runId}, '${rule.rule_id}', \`${rule.rule_name}\`)"
+                                class="bg-black text-white px-3 py-1 rounded hover:bg-slate-800">
+                            Fix
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+    } catch (err) {
+        console.error("Error loading failed rules:", err);
+    }
 }
 
-async function fixRule(runId, ruleId) {
-    await fetch(`/remediation/execute/${runId}/${ruleId}`, {
-        method: "POST"
-    });
+// =======================
+// FIX RULE
+// =======================
+async function fixRule(runId, ruleId, ruleName) {
+    try {
+        console.log("Fixing:", ruleId, ruleName);
 
-    alert("Remediation executed.");
-    loadRuns();
-}
+        // Step 1: raise request
+        const raiseRes = await fetch(
+            `/remediation/raise?system_id=${systemId}&rule_id=${ruleId}&rule_name=${encodeURIComponent(ruleName)}`,
+            {
+                method: "POST",
+                headers: authHeaders()
+            }
+        );
 
-async function loadTrend() {
-    const res = await fetch(`/audit/trend/${systemId}`);
-    const trend = await res.json();
-
-    new Chart(document.getElementById("trendChart"), {
-        type: "bar",
-        data: {
-            labels: trend.map(t => `Run ${t.run_id}`),
-            datasets: [{
-                label: "Score",
-                data: trend.map(t => t.score),
-                backgroundColor: "#3b82f6"
-            }]
+        if (!raiseRes.ok) {
+            alert("Failed to raise request");
+            return;
         }
-    });
+
+        // small delay (DB sync)
+        await new Promise(r => setTimeout(r, 1000));
+
+        // Step 2: fetch pending
+        const res = await fetch(`/remediation/pending`, {
+            headers: authHeaders()
+        });
+
+        const pending = await res.json();
+
+        const req = pending.find(r => r.rule_id == ruleId);
+
+        if (!req) {
+            alert("Request not found");
+            return;
+        }
+
+        // Step 3: approve
+        const approveRes = await fetch(`/remediation/approve/${req.id}`, {
+            method: "POST",
+            headers: authHeaders()
+        });
+
+        if (!approveRes.ok) {
+            alert("Approval failed");
+            return;
+        }
+
+        alert("Remediation executed");
+
+        // 🔥 refresh ONLY after fix
+        setTimeout(() => {
+            loadRuns();
+            loadFailed(runId);
+            loadTrend();
+        }, 1500);
+
+    } catch (err) {
+        console.error("Fix error:", err);
+    }
 }
 
+// =======================
+// LOAD TREND
+// =======================
+async function loadTrend() {
+    try {
+        const res = await fetch(`/audit/trend/${systemId}`);
+        const trend = await res.json();
+
+        new Chart(document.getElementById("trendChart"), {
+            type: "bar",
+            data: {
+                labels: trend.map(t => `Run ${t.run_id}`),
+                datasets: [{
+                    label: "Score",
+                    data: trend.map(t => t.score),
+                    backgroundColor: "#3b82f6"
+                }]
+            }
+        });
+
+    } catch (err) {
+        console.error("Trend error:", err);
+    }
+}
+
+// =======================
+// INIT
+// =======================
 loadRuns();
 loadTrend();
+
 </script>
 
 {% endblock %}

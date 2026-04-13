@@ -4,16 +4,16 @@ import json
 import platform
 import os
 import socket
+import uuid
 
 SERVER_URL = "http://13.62.224.104:8000"
-SYSTEM_ID_FILE = "system_id.txt"
 
 if platform.system() != "Windows":
     print("This agent runs only on Windows.")
     exit()
 
 
-# ✅ REAL IP DETECTION
+# 🔥 GET REAL IP
 def get_ip():
     try:
         return socket.gethostbyname(socket.gethostname())
@@ -21,11 +21,15 @@ def get_ip():
         return "127.0.0.1"
 
 
-def register_system():
+# 🔥 REGISTER OR GET SYSTEM (USING machine_id)
+def register_or_get_system():
+    machine_id = str(uuid.getnode())
+
     payload = {
         "hostname": platform.node(),
-        "ip_address": get_ip(),   # 🔥 FIXED
-        "os_type": "windows"
+        "ip_address": get_ip(),
+        "os_type": "windows",
+        "machine_id": machine_id
     }
 
     r = requests.post(f"{SERVER_URL}/systems/", json=payload)
@@ -37,22 +41,13 @@ def register_system():
     return r.json()["id"]
 
 
-# ✅ REUSE SYSTEM (IMPORTANT)
-if os.path.exists(SYSTEM_ID_FILE):
-    with open(SYSTEM_ID_FILE, "r") as f:
-        system_id = int(f.read())
-else:
-    system_id = register_system()
-    with open(SYSTEM_ID_FILE, "w") as f:
-        f.write(str(system_id))
-
-
 print("[+] Running Windows CIS Scanner...")
 
-# ✅ safer path
+# 🔥 RUN SCAN
 subprocess.run(["python", os.path.join("agents", "windows_scan.py")])
 
 
+# 🔥 LOAD RESULTS
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 json_path = os.path.join(BASE_DIR, "..", "output", "scan.json")
 
@@ -63,6 +58,8 @@ if not os.path.exists(json_path):
 with open(json_path, "r") as f:
     scan_data = json.load(f)
 
+
+# 🔥 PARSE RESULTS
 parsed_results = []
 
 for rule in scan_data.get("checks", []):
@@ -71,11 +68,16 @@ for rule in scan_data.get("checks", []):
         "rule_name": rule.get("title"),
         "framework": "CIS Windows 11",
         "severity": rule.get("severity", "MEDIUM").upper(),
-        "status": rule.get("status") == "PASS",
+        "status": True if rule.get("status") == "PASS" else False,
         "remediation": rule.get("remediation", "N/A")
     })
 
 
+# 🔥 GET SYSTEM ID (NO FILE STORAGE)
+system_id = register_or_get_system()
+
+
+# 🔥 UPLOAD
 payload = {
     "system_id": system_id,
     "results": parsed_results

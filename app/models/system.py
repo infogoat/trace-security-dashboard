@@ -9,6 +9,7 @@ class System(Base):
     hostname = Column(String, nullable=False)
     ip_address = Column(String, nullable=False)
     os_type = Column(String, nullable=False)
+    machine_id = Column(String, unique=True, index=True)
     security_score = Column(Float, default=0.0)
 
     owner = relationship("User", back_populates="systems")
