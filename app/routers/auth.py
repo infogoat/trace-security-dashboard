@@ -37,10 +37,16 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="User already exists")
 
+    role = user.role if user.role else "user"
+
+    # HARD CONTROL
+    if user.username == "admin":
+        role = "admin"
+    
     new_user = User(
         username=user.username,
         password=hash_password(user.password),
-        role=user.role
+        role=role
     )
 
     db.add(new_user)
@@ -67,7 +73,11 @@ def login(
     return {
     "access_token": access_token,
     "token_type": "bearer",
-    "role": user.role
+    "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role
+        }
     }
 @router.get("/me")
 def get_me(current_user: User = Depends(get_current_user)):

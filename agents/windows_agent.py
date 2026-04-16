@@ -12,6 +12,20 @@ if platform.system() != "Windows":
     print("This agent runs only on Windows.")
     exit()
 
+def login():
+    username = input("Username: ")
+    password = input("Password: ")
+
+    res = requests.post(
+        f"{SERVER_URL}/login",
+        data={"username": username, "password": password}
+    )
+
+    if res.status_code != 200:
+        print("Login failed")
+        exit()
+
+    return res.json()["access_token"]
 
 # 🔥 GET REAL IP
 def get_ip():
@@ -92,3 +106,4 @@ response = requests.post(
 
 print("Server response:", response.status_code)
 print(response.text)
+print(f"👉 Dashboard: http://13.62.224.104/system/{system_id}")

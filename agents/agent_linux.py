@@ -1,3 +1,4 @@
+
 import requests
 import socket
 import platform
@@ -13,6 +14,21 @@ from agent.cis.ubuntu_20 import run_all_checks
 
 SERVER_URL = "http://13.62.224.104:8000"
 
+def login():
+    username = input("Username: ")
+    password = input("Password: ")
+
+    res = requests.post(
+        f"{SERVER_URL}/login",
+        data={"username": username, "password": password}
+    )
+
+    if res.status_code != 200:
+        print("❌ Login failed")
+        print("👉 Register at: http://13.62.224.104/register")
+        exit()
+
+    return res.json()["access_token"]
 
 def get_ip():
     try:
@@ -32,7 +48,9 @@ def get_system_info():
     return hostname, ip_address, os_type, machine_id
 
 
-def register_or_get_system(hostname, ip_address, os_type, machine_id):
+def register_or_get_system(hostname, ip_address, os_type, machine_id, token):
+    headers = {"Authorization": f"Bearer {token}"}
+
     response = requests.post(
         f"{SERVER_URL}/systems/",
         json={
@@ -40,7 +58,8 @@ def register_or_get_system(hostname, ip_address, os_type, machine_id):
             "ip_address": ip_address,
             "os_type": os_type,
             "machine_id": machine_id
-        }
+        },
+        headers=headers
     )
 
     if response.status_code != 200:
@@ -54,13 +73,15 @@ def run_audit():
     return run_all_checks()
 
 
-def upload_results(system_id, results):
+def upload_results(system_id, results,token):
+    headers = {"Authorization": f"Bearer {token}"}
     response = requests.post(
         f"{SERVER_URL}/audit/upload",
         json={
             "system_id": system_id,
             "results": results
-        }
+        },
+        headers=headers
     )
 
     if response.status_code != 200:
@@ -73,10 +94,12 @@ def upload_results(system_id, results):
 def main():
     print("[+] TRACE Linux Agent Starting")
 
+    token = login()
+
     hostname, ip_address, os_type, machine_id = get_system_info()
 
     system_id = register_or_get_system(
-        hostname, ip_address, os_type, machine_id
+        hostname, ip_address, os_type, machine_id, token
     )
 
     print(f"[+] System ID: {system_id}")
@@ -84,9 +107,9 @@ def main():
     results = run_audit()
     print(f"[+] Running audit... {len(results)} checks")
 
-    response = upload_results(system_id, results)
+    response = upload_results(system_id, results, token)
 
-    print("[+] Audit Uploaded")
+    print("[+] Audit Done")
     print("[+] Security Score:")
     print(response)
 

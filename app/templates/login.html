@@ -120,11 +120,19 @@ document.getElementById("authForm").addEventListener("submit", async function(e)
         const data = await res.json();
 
         if (data.access_token) {
-            localStorage.setItem("token", data.access_token);
-            localStorage.setItem("role", data.role);
-            window.location.href = "/dashboard";
+           // 🔥 FIX STARTS HERE
+           localStorage.setItem("token", data.access_token);
+
+          // store full user object (IMPORTANT)
+           localStorage.setItem("user", JSON.stringify(data.user));
+
+         // optional: keep role if you still use it somewhere
+           localStorage.setItem("role", data.user.role);
+
+        // 🔥 redirect
+           window.location.href = "/dashboard";
         } else {
-            alert("Invalid credentials");
+           alert("Invalid credentials");
         }
 
     } else {
