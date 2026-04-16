@@ -122,14 +122,20 @@ def load_results():
 
     for rule in scan_data.get("checks", []):
         parsed_results.append({
-            "rule_id": str(rule.get("id")),
-            "rule_name": rule.get("title"),
-            "framework": "CIS Windows 11",
-            "severity": rule.get("severity", "MEDIUM").upper(),
-            "status": True if rule.get("status") == "PASS" else False,
-            "remediation": rule.get("remediation", "N/A")
-        })
+            "rule_id": str(rule.get("id") or "unknown"),
 
+            # 🔥 FIXED (fallback logic)
+            "rule_name": rule.get("title") 
+                 or rule.get("name") 
+                 or f"Rule {rule.get('id')}",
+
+            "framework": "CIS Windows 11",
+            "severity": (rule.get("severity") or "MEDIUM").upper(),
+
+            "status": True if rule.get("status") == "PASS" else False,
+
+            "remediation": rule.get("remediation") or "N/A"
+         })
     return parsed_results
 
 
