@@ -93,8 +93,8 @@ def register_or_get_system(token, hostname, ip, os_type, machine_id):
 def run_scan():
     print("[+] Running Windows CIS Scanner...")
 
-    script_path = os.path.join("agents", "windows_scan.py")
-
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    script_path = os.path.join(BASE_DIR, "windows_scan.py")
     result = subprocess.run(["python", script_path])
 
     if result.returncode != 0:
@@ -108,6 +108,10 @@ def run_scan():
 # 📂 LOAD SCAN RESULTS
 # ===============================
 def load_results():
+    import os
+    import sys
+    import json
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
     json_path = os.path.join(base_dir, "..", "output", "scan.json")
 
@@ -121,23 +125,41 @@ def load_results():
     parsed_results = []
 
     for rule in scan_data.get("checks", []):
-        parsed_results.append({
-            "rule_id": str(rule.get("id") or "unknown"),
 
-            # 🔥 FIXED (fallback logic)
-            "rule_name": rule.get("title") 
-                 or rule.get("name") 
-                 or f"Rule {rule.get('id')}",
+        # 🚨 HARD CHECK — DO NOT ALLOW MISSING ID
+        if not rule.get("id"):
+            print("❌ ERROR: Missing rule ID:", rule)
+            continue
+
+        rule_id = str(rule["id"])
+
+        # ✅ FLAG LOGIC (for remediation simulation)
+        flag_path = f"C:\\temp\\fixed_{rule_id.replace('.', '_')}"
+
+        if os.path.exists(flag_path):
+            status = True
+        else:
+            status = True if rule.get("status") == "PASS" else False
+
+        parsed_results.append({
+            "rule_id": rule_id,
+
+            "rule_name": rule.get("title")
+                or rule.get("name")
+                or f"Rule {rule_id}",
 
             "framework": "CIS Windows 11",
+
             "severity": (rule.get("severity") or "MEDIUM").upper(),
 
-            "status": True if rule.get("status") == "PASS" else False,
+            "status": status,
 
             "remediation": rule.get("remediation") or "N/A"
-         })
-    return parsed_results
+        })
 
+    print(f"[DEBUG] Parsed {len(parsed_results)} results")
+
+    return parsed_results
 
 # ===============================
 # 📤 UPLOAD RESULTS (AUTH)
